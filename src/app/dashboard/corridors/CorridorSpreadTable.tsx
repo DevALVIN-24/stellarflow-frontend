@@ -2,6 +2,11 @@
 
 import React from "react";
 import type { CorridorMetrics } from "../../hooks/useCorridorMetrics";
+import {
+  CorridorAssetIcon,
+  CorridorSpriteIcon,
+  parseCorridorPairCodes,
+} from "./CorridorAssetIcon";
 
 interface CorridorSpreadTableProps {
   metrics: CorridorMetrics[];
@@ -29,6 +34,8 @@ const CorridorSpreadRow = React.memo(
     isActive,
     onSelectPair,
   }: CorridorSpreadRowProps) {
+    const pairCodes = parseCorridorPairCodes(item.pair);
+
     return (
       <tr
         onClick={() => onSelectPair(item.pair)}
@@ -38,7 +45,25 @@ const CorridorSpreadRow = React.memo(
             : "hover:bg-neutral-900"
         }`}
       >
-        <td className="py-3 px-4 font-bold text-neutral-200">{item.pair}</td>
+        <td className="py-3 px-4 font-bold text-neutral-200">
+          <div className="flex items-center gap-2 min-w-0">
+            {pairCodes && (
+              <span className="flex items-center gap-1 shrink-0">
+                <CorridorAssetIcon
+                  code={pairCodes[0]}
+                  size={18}
+                  className="text-lime-400"
+                />
+                <CorridorAssetIcon
+                  code={pairCodes[1]}
+                  size={18}
+                  className="text-neutral-400"
+                />
+              </span>
+            )}
+            <span className="truncate">{item.pair}</span>
+          </div>
+        </td>
         <td className="py-3 px-4 text-xs text-neutral-400">{item.source}</td>
         <td className="py-3 px-4 text-right font-mono text-lime-400">
           {item.rate.toLocaleString(undefined, {
@@ -89,7 +114,13 @@ export default function CorridorSpreadTable({
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 shadow-2xl">
       <h2 className="text-lg font-semibold mb-4 text-neutral-200 flex items-center gap-2">
-        <span>🔀</span> Cross-Border Exchange Corridors
+        <CorridorSpriteIcon
+          symbolId="icon-corridor-exchange"
+          size={20}
+          className="text-lime-400 shrink-0"
+          aria-label="Cross-border corridors"
+        />{" "}
+        Cross-Border Exchange Corridors
       </h2>
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
