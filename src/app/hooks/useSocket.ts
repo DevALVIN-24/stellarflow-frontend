@@ -124,7 +124,9 @@ function useSocketState(options: UseSocketOptions): UseSocketReturn {
 
   // ------------------------------------------------------------------
   // Mount effect — register listeners and initial asset subscriptions.
-  // Runs once; all callbacks are stable so this never tears down on ticks.
+  // Runs once per visibility transition; all callbacks are scoped to this
+  // consumer so global WebSocket traffic does not force unrelated trees to
+  // reconcile.
   // ------------------------------------------------------------------
   useEffect(() => {
     const handleIncomingData = (data: PriceData | Partial<PriceData>) => {
@@ -143,24 +145,18 @@ function useSocketState(options: UseSocketOptions): UseSocketReturn {
 
     wsManager.subscribeToMessages(handleIncomingData);
     wsManager.subscribeToStatus(handleStatusChange);
-
-    // Ensure the singleton connection is open.
     wsManager.connect();
-    
-    return () => {
-      // Clean up subscriptions
-    };
-  }, [wsManager, isVisible, setError]);
 
-    if (subscribedAssetsRef.current.size > 0) {
-      wsManager.subscribeToAssets(Array.from(subscribedAssetsRef.current));
+    const assetsOnMount = Array.from(subscribedAssetsRef.current);
+    if (assetsOnMount.length > 0) {
+      wsManager.subscribeToAssets(assetsOnMount);
     }
 
     return () => {
       wsManager.unsubscribeFromMessages(handleIncomingData);
       wsManager.unsubscribeFromStatus(handleStatusChange);
-      if (subscribedAssetsRef.current.size > 0) {
-        wsManager.unsubscribeFromAssets(Array.from(subscribedAssetsRef.current));
+      if (assetsOnMount.length > 0) {
+        wsManager.unsubscribeFromAssets(assetsOnMount);
       }
       flushPendingUpdates();
     };

@@ -21,7 +21,7 @@ import React, {
   useMemo,
   type ReactNode,
 } from 'react';
-import { useSocketConnection, useSocketData, useSocketActions } from '@/app/components/providers/SocketProvider';
+import { useTelemetryActions, useTelemetryConnection, useTelemetryFeed } from '@/context/TelemetryContext';
 import type { PriceData } from '@/types';
 
 // ---------------------------------------------------------------------------
@@ -61,7 +61,7 @@ const CorridorActionsContext =
   createContext<CorridorActionsContextType | null>(null);
 
 // ---------------------------------------------------------------------------
-// Provider — bridges the global SocketProvider into corridor-scoped slices
+// Provider — bridges the leaf TelemetryProvider into corridor-scoped slices
 // ---------------------------------------------------------------------------
 
 interface CorridorProviderProps {
@@ -74,12 +74,12 @@ interface CorridorProviderProps {
  * must remain outside so they are never re-rendered by socket ticks.
  */
 export function CorridorProvider({ children }: CorridorProviderProps) {
-  // Pull the three independent slices from the local SocketProvider.
+  // Pull the three independent slices from the leaf TelemetryProvider.
   // Each hook already subscribes to only its own slice, so only the relevant
   // re-render cascade is triggered inside this sub-tree.
-  const { isConnected, error, reconnectAttempts } = useSocketConnection();
-  const { lastUpdate } = useSocketData();
-  const { subscribeToAsset, unsubscribeFromAsset, reconnect } = useSocketActions();
+  const { isConnected, error, reconnectAttempts } = useTelemetryConnection();
+  const { lastUpdate } = useTelemetryFeed();
+  const { subscribeToAsset, unsubscribeFromAsset, reconnect } = useTelemetryActions();
 
   // Memoize each slice independently so that a price tick only invalidates
   // the stream context — the connection and actions contexts keep their

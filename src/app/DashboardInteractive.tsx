@@ -11,7 +11,7 @@ import { DashboardTrafficChartSkeleton } from "@/components/skeletons/DashboardT
 import { useMounted } from "@/app/hooks/useMounted";
 import WebSocketTest from "./components/test/WebSocketTest";
 import { CorridorProvider } from "@/context/CorridorContext";
-import { SocketProvider } from "./components/providers/SocketProvider";
+import { TelemetryProvider } from "@/context/TelemetryContext";
 import { ASSET_SYMBOLS } from "@/config/assetSymbols";
 
 const LiveNetworkMap = dynamic(() => import("@/app/components/Map"), {
@@ -281,12 +281,12 @@ export default function DashboardInteractive({
       <RateCardSection rateCards={rateCards} cardsReady={cardsReady} />
 
       {/*
-        CorridorProvider — boundary for live socket stream state.
+        TelemetryProvider — leaf boundary for live socket stream state.
         Only components inside this subtree (PriceFeedCard, WebSocketTest)
         will re-render on price ticks. All other layout panels above and below
         this boundary are shielded by React.memo rendering gates.
       */}
-      <SocketProvider
+      <TelemetryProvider
         options={{ assetIds: [ASSET_SYMBOLS.NGN_XLM], enableDeltaUpdates: true }}
       >
         <CorridorProvider>
@@ -302,7 +302,7 @@ export default function DashboardInteractive({
           <WebSocketTest />
         </section>
         </CorridorProvider>
-      </SocketProvider>
+      </TelemetryProvider>
 
       {/* Live Network Map — memo-gated, no socket dependency */}
       <NetworkMapSection />
