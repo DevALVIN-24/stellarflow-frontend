@@ -15,7 +15,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: var(--font-geist-sans);
   --color-neon-green: #39ff14;
   --color-oracle-navy: #0a0f1e;
   --color-oracle-border: #1b2a3b;
