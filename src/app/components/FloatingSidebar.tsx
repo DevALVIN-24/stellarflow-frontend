@@ -74,7 +74,7 @@ const FloatingSidebar = memo(() => {
 
         return (
           <div key={label} className="relative flex items-center">
-            {/* Gold active indicator for desktop and mobile */}
+            {/* Gold active indicator - conditionally rendered to remove from DOM when inactive */}
             {isActive && (
               <>
                 <span

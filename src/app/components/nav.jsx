@@ -64,6 +64,7 @@ const Nav = memo(() => {
             }
           >
             <Bell className="w-6 h-6 text-slate-200" />
+            {/* Anomaly badge - conditionally rendered to remove from DOM when inactive */}
             {hasAnomaly && (
               <span className="absolute -top-1 -right-1 inline-flex h-3 w-3">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
