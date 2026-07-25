@@ -1,6 +1,6 @@
 import "@/config/env";
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { ProgressBarProvider } from "./components/TopLoadingBar";
@@ -17,12 +17,8 @@ const geistSans = Geist({
   display: "optional",
 });
 
-// Monospace font is non-critical path — defer preload to reduce initial payload.
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-  display: "optional",
-});
+// Single variable font asset covers all app text weights; monospace utilities
+// are mapped to this same face in globals.css to avoid a second font payload.
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -80,7 +76,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} antialiased`}
       >
         {/* Single global SVG symbol sheet — all icon <use> refs resolve here */}
         <SvgSprite />

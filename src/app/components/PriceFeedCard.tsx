@@ -15,6 +15,7 @@ import { useDebounce } from "../hooks/useDebounce";
 import { useRafThrottle } from "../hooks/useRafThrottle";
 import { useErrorTimeout } from "../hooks/useErrorTimeout";
 import { Shimmer } from "@/components/skeletons/Shimmer";
+import { PriceFeedCardSkeleton } from "@/components/skeletons/PriceFeedCardSkeleton";
 import { getCachedHistory, getCachedHistorySync, setCachedHistory } from "../lib/historySync";
 import { useMounted } from "@/app/hooks/useMounted";
 import { usePageVisibility } from "../hooks/usePageVisibility";
@@ -149,10 +150,6 @@ const PriceFeedCard: React.FC<PriceFeedCardProps> = ({
     });
   }, []);
 
-  // Granular context subscriptions — each hook only re-renders this component
-  // when its specific slice changes, not on every unrelated socket event.
-  const { isConnected, error: wsError } = useSocketConnection();
-  const { lastUpdate: wsUpdate } = useSocketData();
   // Granular corridor context subscriptions — each hook only re-renders this
   // component when its specific slice changes. Price ticks update only the
   // stream slice; connection changes update only the connection slice.
