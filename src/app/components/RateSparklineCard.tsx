@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Shimmer } from "@/components/skeletons";
+import { Shimmer } from "@/components/skeletons/Shimmer";
 import { useChartWorker } from "../charts/useChartWorker";
 import {
   computeSparklinePoints,
@@ -36,7 +36,6 @@ const MiniSparkline = React.memo(function MiniSparkline({
 
   useEffect(() => {
     let cancelled = false;
-    setPoints(seed);
     computeSparkline(id, data, SPARKLINE_GEOMETRY)
       .then((next) => {
         if (!cancelled) setPoints(next);
@@ -47,7 +46,7 @@ const MiniSparkline = React.memo(function MiniSparkline({
     return () => {
       cancelled = true;
     };
-  }, [data, id, seed, computeSparkline]);
+  }, [data, id, computeSparkline, seed]);
 
   return (
     <svg
@@ -128,14 +127,35 @@ const RateSparklineCard: React.FC<RateSparklineCardProps> = ({
           <p className="text-xs uppercase tracking-[0.3em] text-gray-500">
             {currency}
           </p>
-          <p className="mt-2 text-2xl font-black text-white tracking-tight">
-            {formattedRate}
-          </p>
+        <p
+  className="
+    mt-2
+    text-2xl
+    font-black
+    text-white
+    tracking-tight
+    font-mono
+    tabular-nums
+    min-w-[10ch]
+  "
+>
+    {formattedRate}
+</p>
         </div>
         <span
           className={`inline-flex items-center rounded-full px-3 py-1 text-[10px] font-semibold ${trendClasses}`}
         >
-          {trendLabel}
+          <span
+    className="
+        font-mono
+        tabular-nums
+        inline-block
+        min-w-[7ch]
+        text-center
+    "
+>
+    {trendLabel}
+</span>
         </span>
       </div>
 

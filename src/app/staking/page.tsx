@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useDebounce } from '../hooks/useDebounce';
 import { useRafThrottle } from '../hooks/useRafThrottle';
 import { useTransformedCustomAddressField } from '@/app/hooks/useTransformedData';
@@ -22,7 +22,8 @@ import {
   type StakerTableRecord,
 } from '@/app/components/staking/StakerTableRow';
 import { BondAllocationCalculator } from '@/app/components/staking/BondAllocationCalculator';
-import { Icon, ICON_IDS } from '@/components/icons';
+import Icon from '@/components/icons/Icon';
+import { ICON_IDS } from '@/components/icons/iconIds';
 
 // --- Types ---
 type StakerNode = StakerTableRecord;
@@ -42,10 +43,43 @@ export default function StakingPage() {
 
   const [confirmationMsg, setConfirmationMsg] = useState<string | null>(null);
 
-  const handleConfirm = useCallback((_allocations: Record<string, number>) => {
-    setConfirmationMsg('Allocation confirmed. Submitting to network…');
-    setTimeout(() => setConfirmationMsg(null), 2000);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const timeoutsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+
+  useEffect(() => {
+    return () => {
+      // Explicitly cleanup trailing timers on unmount
+      timeoutsRef.current.forEach(clearTimeout);
+      timeoutsRef.current.clear();
+    };
   }, []);
+
+  const handleConfirm = useCallback(async (allocations: Record<string, number>) => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    setConfirmationMsg('Loading secure environment...');
+    try {
+      const { submitTransaction } = await import('@/lib/transactionOps');
+      setConfirmationMsg('Allocation confirmed. Submitting to network…');
+      const txHash = await submitTransaction(allocations);
+      setConfirmationMsg(`Transaction successful: ${txHash}`);
+      
+      const timer1 = setTimeout(() => {
+        setConfirmationMsg(null);
+        timeoutsRef.current.delete(timer1);
+      }, 3000);
+      timeoutsRef.current.add(timer1);
+    } catch (err) {
+      setConfirmationMsg('Transaction failed');
+      const timer2 = setTimeout(() => {
+        setConfirmationMsg(null);
+        timeoutsRef.current.delete(timer2);
+      }, 2000);
+      timeoutsRef.current.add(timer2);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [isSubmitting]);
 
   const displayedStakers = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
@@ -63,13 +97,19 @@ export default function StakingPage() {
           <h1 className="text-3xl font-bold tracking-tight">Staking & Collateral Pool</h1>
         </div>
         <div className="flex gap-3">
-          <button className="flex items-center gap-2 bg-[#161b22] border border-gray-800 hover:bg-gray-800 text-gray-300 px-4 py-2 rounded-lg transition-all text-sm">
-            <Icon id={ICON_IDS.percent} size={16} className="text-yellow-500" />
-            Adjust Network APY
+          <button className="flex items-center gap-2 bg-[#161b22] border border-gray-800 text-gray-300 px-4 py-2 rounded-lg text-sm relative overflow-hidden" style={{ transition: 'transform 150ms ease, box-shadow 150ms ease' }}>
+            <span className="absolute inset-0 bg-gray-800 opacity-0 hover:opacity-100 transition-opacity duration-150 pointer-events-none" />
+            <span className="relative z-10 flex items-center gap-2">
+              <Icon id={ICON_IDS.percent} size={16} className="text-yellow-500" />
+              Adjust Network APY
+            </span>
           </button>
-          <button className="flex items-center gap-2 bg-red-950/40 border border-red-900/50 hover:bg-red-900/30 text-red-400 px-4 py-2 rounded-lg transition-all text-sm font-medium">
-            <Icon id={ICON_IDS.flame} size={16} />
-            Execute Manual Slashing
+          <button className="flex items-center gap-2 bg-red-950/40 border border-red-900/50 text-red-400 px-4 py-2 rounded-lg text-sm font-medium relative overflow-hidden" style={{ transition: 'transform 150ms ease, box-shadow 150ms ease' }}>
+            <span className="absolute inset-0 bg-red-900/30 opacity-0 hover:opacity-100 transition-opacity duration-150 pointer-events-none" />
+            <span className="relative z-10 flex items-center gap-2">
+              <Icon id={ICON_IDS.flame} size={16} />
+              Execute Manual Slashing
+            </span>
           </button>
         </div>
       </div>
@@ -87,15 +127,20 @@ export default function StakingPage() {
         <div className="p-4 border-b border-gray-800 flex flex-col md:flex-row justify-between gap-4">
           <div className="relative w-full md:w-96">
             <Icon id={ICON_IDS.search} size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-            <input 
-              type="text" 
-              placeholder="Search active stakers by node name or identity..." 
-              className="w-full bg-[#0d1117] border border-gray-700 rounded-md py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500 transition-colors"
-              onChange={(e) => throttledSetSearchTerm(e.target.value)}
-            />
+            <div className="relative">
+              <input 
+                type="text" 
+                placeholder="Search active stakers by node name or identity..." 
+                className="w-full bg-[#0d1117] border border-gray-700 rounded-md py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500 relative z-10"
+                style={{ transition: 'border-color 150ms ease' }}
+                onChange={(e) => throttledSetSearchTerm(e.target.value)}
+              />
+              <span className="absolute inset-0 bg-gray-800 opacity-0 hover:opacity-100 transition-opacity duration-150 pointer-events-none rounded-md" />
+            </div>
           </div>
-          <button className="p-2 bg-[#0d1117] hover:bg-gray-800 rounded-md border border-gray-700 text-gray-400 self-end md:self-auto">
-            <Icon id={ICON_IDS.refresh} size={16} />
+          <button className="p-2 bg-[#0d1117] border border-gray-700 text-gray-400 self-end md:self-auto rounded-md relative overflow-hidden" style={{ transition: 'border-color 150ms ease' }}>
+            <span className="absolute inset-0 bg-gray-800 opacity-0 hover:opacity-100 transition-opacity duration-150 pointer-events-none rounded-md" />
+            <Icon id={ICON_IDS.refresh} size={16} className="relative z-10" />
           </button>
         </div>
 

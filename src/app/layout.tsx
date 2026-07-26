@@ -1,29 +1,24 @@
 import "@/config/env";
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { ProgressBarProvider } from "./components/TopLoadingBar";
 import { UserProvider } from "./components/providers/UserProvider";
-import { SocketProvider } from "./components/providers/SocketProvider";
-import { WalletProvider } from "./components/providers/WalletProvider";
 import { QueryProvider } from "./components/providers/QueryProvider";
 import Script from "next/script";
-import { SvgSprite } from "@/components/icons";
+import SvgSprite from "@/components/icons/SvgSprite";
 
+// subsets: ["latin"] restricts glyph maps to Latin characters only,
+// avoiding loading Cyrillic/Greek/CJK blocks and reducing CSS payload.
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
   display: "optional",
-  weight: ["400", "700"]
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-  display: "optional",
-  weight: ["400", "700"]
-});
+// Single variable font asset covers all app text weights; monospace utilities
+// are mapped to this same face in globals.css to avoid a second font payload.
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -53,6 +48,14 @@ export default function RootLayout({
           type="image/webp"
           fetchPriority="high"
         />
+        {/* Preload the SVG symbol sheet so icons render on first paint */}
+        <link
+          rel="preload"
+          href="/sprite.svg"
+          as="image"
+          type="image/svg+xml"
+          fetchPriority="low"
+        />
         <Script
           id="polyfill-loader"
           strategy="afterInteractive"
@@ -73,7 +76,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} antialiased`}
       >
         {/* Single global SVG symbol sheet — all icon <use> refs resolve here */}
         <SvgSprite />
@@ -84,17 +87,11 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <UserProvider>
-            {/* SocketProvider wraps the full app so any route can consume
-                live WebSocket data without re-mounting on navigation. */}
-            <SocketProvider>
-              <WalletProvider>
-                <QueryProvider>
-                  <ProgressBarProvider>
-                    {children}
-                  </ProgressBarProvider>
-                </QueryProvider>
-              </WalletProvider>
-            </SocketProvider>
+            <QueryProvider>
+              <ProgressBarProvider>
+                {children}
+              </ProgressBarProvider>
+            </QueryProvider>
           </UserProvider>
         </ThemeProvider>
       </body>

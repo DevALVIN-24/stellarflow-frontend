@@ -4,11 +4,12 @@ import React, { memo, useCallback } from "react";
 import OptimizedImage from "./OptimizedImage";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { Icon, ICON_IDS } from "@/components/icons";
+import Icon from "@/components/icons/Icon";
+import { ICON_IDS } from "@/components/icons/iconIds";
 import { useProgressBar } from "./TopLoadingBar";
-import { useWallet, useWalletStatus, useWalletActions } from "../hooks/useWalletState";
+import { WalletProvider, useWallet, useWalletStatus, useWalletActions } from "../hooks/useWalletState";
 
-const WalletConnectButton = memo(() => {
+const WalletConnectButtonContent = memo(() => {
   const { wallet } = useWallet();
   const { isChecking } = useWalletStatus();
   const { refreshWalletState } = useWalletActions();
@@ -43,6 +44,13 @@ const WalletConnectButton = memo(() => {
     </button>
   );
 });
+WalletConnectButtonContent.displayName = "WalletConnectButtonContent";
+
+const WalletConnectButton = memo(() => (
+  <WalletProvider>
+    <WalletConnectButtonContent />
+  </WalletProvider>
+));
 WalletConnectButton.displayName = "WalletConnectButton";
 
 const Nav = memo(() => {

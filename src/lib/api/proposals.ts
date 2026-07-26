@@ -1,22 +1,16 @@
-import type { ProposalVote } from '@/types/voting';
+import type { ProposalVote } from "@/types/voting";
+import { getFetchCacheOptions } from "@/config/cacheConfig";
 
-function staggeredRevalidate(proposalId: string): number {
-  let hash = 0;
-  for (let i = 0; i < proposalId.length; i++) {
-    hash = (hash * 31 + proposalId.charCodeAt(i)) | 0;
-  }
-  return 60 + (Math.abs(hash) % 60);
-}
-
-export async function fetchProposalVotes(proposalId: string): Promise<ProposalVote[]> {
+/**
+ * Fetches proposal votes with enforced cache re-validation (60 seconds).
+ * Prevents backend flooding with redundant vote update requests.
+ */
+export async function fetchProposalVotes(
+  proposalId: string,
+): Promise<ProposalVote[]> {
   const res = await fetch(
     `${process.env.NEXT_PUBLIC_API_URL}/proposals/${proposalId}/votes`,
-    {
-      next: {
-        revalidate: staggeredRevalidate(proposalId),
-        tags: [`proposal-${proposalId}`],
-      },
-    }
+    getFetchCacheOptions("MEDIUM_INTERVAL"),
   );
 
   if (!res.ok) {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import {
   Chart,
   LineController,
@@ -13,6 +13,7 @@ import {
   type ChartConfiguration,
 } from "chart.js";
 import { useChartWorker } from "../charts/useChartWorker";
+import { useImageWorker } from "../images/useImageWorker";
 import {
   windowSeries,
   CHART_HISTORY_LIMIT,
@@ -41,18 +42,20 @@ interface PointerPosition {
   offsetY: number;
 }
 
-export default function DashboardTrafficChart({
+const DashboardTrafficChart = React.memo(function DashboardTrafficChart({
   labels = ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00"],
   values = [120, 180, 260, 240, 310, 390],
 }: DashboardTrafficChartProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const chartRef = useRef<Chart<"line"> | null>(null);
   const { computeSeries } = useChartWorker();
+  const { decodeImage } = useImageWorker();
 
   // Track pointer state for RAF loop
   const pointerPositionRef = useRef<PointerPosition | null>(null);
   const rafRef = useRef<number | null>(null);
   const isHoveringRef = useRef(false);
+  const updateTooltipRef = useRef<(() => void) | null>(null);
 
   // Seed synchronously from the shared module so the first paint is correct;
   // the worker then re-windows off the main thread when inputs change.
@@ -61,47 +64,66 @@ export default function DashboardTrafficChart({
   );
 
   // Rigid 60 FPS animation loop to update tooltip
-  const updateTooltip = useCallback(() => {
-    const chart = chartRef.current;
-    const position = pointerPositionRef.current;
+  // Use a ref-based pattern to avoid self-referential issues
+  useEffect(() => {
+    const updateTooltip = () => {
+      const chart = chartRef.current;
+      const position = pointerPositionRef.current;
 
-    if (!chart) return;
+      if (!chart) return;
 
-    if (isHoveringRef.current && position) {
-      const event = {
-        clientX: position.clientX,
-        clientY: position.clientY,
-        offsetX: position.offsetX,
-        offsetY: position.offsetY,
-        type: "pointermove",
-      } as unknown as Event;
+      if (isHoveringRef.current && position) {
+        const event = {
+          clientX: position.clientX,
+          clientY: position.clientY,
+          offsetX: position.offsetX,
+          offsetY: position.offsetY,
+          type: "pointermove",
+        } as unknown as Event;
 
-      const activeElements = chart.getElementsAtEventForMode(
-        event,
-        "nearest",
-        { intersect: false },
-        false,
-      );
+        const activeElements = chart.getElementsAtEventForMode(
+          event,
+          "nearest",
+          { intersect: false },
+          false,
+        );
 
-      if (chart.tooltip) {
-        chart.tooltip.setActiveElements(activeElements, {
-          x: position.clientX,
-          y: position.clientY,
-        });
+        if (chart.tooltip) {
+          chart.tooltip.setActiveElements(activeElements, {
+            x: position.clientX,
+            y: position.clientY,
+          });
+        }
+
+        chart.update("none");
       }
 
-      chart.update("none");
-    }
+      rafRef.current = requestAnimationFrame(updateTooltip);
+    };
 
+    updateTooltipRef.current = updateTooltip;
     rafRef.current = requestAnimationFrame(updateTooltip);
+
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
   }, []);
 
   // Offload the data sorting / windowing / aggregation to the chart worker so
   // it stays out of the critical interaction lane during active chart changes.
+  // Create stable dependency keys from array content to prevent unnecessary re-triggers
+  // when parent passes new array instances with identical content.
+  const dependencyKey = useMemo(() => {
+    return `labels:${labels.length}:${labels.join(',')}|values:${values.length}:${values.join(',')}`;
+  }, [labels, values]);
+  
   useEffect(() => {
     let cancelled = false;
     computeSeries("dashboard-traffic", labels, values, CHART_HISTORY_LIMIT)
-      .then(({ window }) => {
+      .then(({ window }: { window: SeriesWindow }) => {
         if (!cancelled) setSeries(window);
       })
       .catch(() => {
@@ -110,9 +132,10 @@ export default function DashboardTrafficChart({
     return () => {
       cancelled = true;
     };
-  }, [labels, values, computeSeries]);
+  }, [dependencyKey, computeSeries]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- labels and values are already reflected in series state
     if (!canvasRef.current) return;
 
     const { labels: windowedLabels, values: windowedValues } = series;
@@ -196,9 +219,6 @@ export default function DashboardTrafficChart({
     canvas.addEventListener("pointerout", hideTooltip, { passive: true });
     canvas.addEventListener("pointercancel", hideTooltip, { passive: true });
 
-    // Start the 60 FPS RAF loop
-    rafRef.current = requestAnimationFrame(updateTooltip);
-
     return () => {
       canvas.removeEventListener("pointermove", handlePointerMove);
       canvas.removeEventListener("pointerleave", hideTooltip);
@@ -210,11 +230,13 @@ export default function DashboardTrafficChart({
       chartRef.current?.destroy();
       chartRef.current = null;
     };
-  }, [series, updateTooltip]);
+  }, [series]);
 
   return (
     <div className="aspect-[16/9] min-h-[280px] w-full">
       <canvas ref={canvasRef} className="h-full w-full" aria-label="NGN/XLM traffic chart" />
     </div>
   );
-}
+});
+
+export default DashboardTrafficChart;

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from 'react';
+import Link from 'next/link';
 import { 
   Vote, 
   FilePlus, 
@@ -15,9 +16,11 @@ import {
 } from 'lucide-react';
 import { subscribe } from '@/workers/masterTimerWorker';
 import { withShortenedAddressField } from '@/utils/addressUtils';
+import { useIsHydrated } from '@/app/hooks/useIsHydrated';
 
-import { useWallet, useWalletStatus, useWalletActions } from '@/app/hooks/useWalletState';
-import { Icon, ICON_IDS } from '@/components/icons';
+import { WalletProvider, useWallet, useWalletStatus, useWalletActions } from '@/app/hooks/useWalletState';
+import Icon from '@/components/icons/Icon';
+import { ICON_IDS } from '@/components/icons/iconIds';
 
 // --- Types ---
 interface Proposal {
@@ -39,7 +42,7 @@ const MOCK_PROPOSALS: Proposal[] = [
   { id: 'SFP-09', title: 'Increase Relayer Missed-Heartbeat Penalty Weight by 2%', proposer: 'GCXXVHZLKMNPQRSXYZABCDEFGHIJKLM7766', status: 'Defeated', votesFor: 110000, votesAgainst: 920000, quorumThreshold: 50, endsInLedgers: 0 },
 ];
 
-const GovernanceWalletControl = React.memo(function GovernanceWalletControl() {
+const GovernanceWalletControlContent = React.memo(function GovernanceWalletControlContent() {
   const { wallet } = useWallet();
   const { isChecking } = useWalletStatus();
   const { refreshWalletState } = useWalletActions();
@@ -61,15 +64,24 @@ const GovernanceWalletControl = React.memo(function GovernanceWalletControl() {
           <button
             onClick={() => refreshWalletState()}
             disabled={isChecking}
-            className="flex items-center gap-2 bg-[#161b22] border border-gray-800 hover:bg-gray-800 text-gray-300 px-4 py-2 rounded-lg transition-all text-sm font-medium"
+            className="flex items-center gap-2 bg-[#161b22] border border-gray-800 text-gray-300 px-4 py-2 rounded-lg text-sm font-medium relative overflow-hidden"
+            style={{ transition: 'transform 150ms ease, box-shadow 150ms ease' }}
           >
-            <Icon id={ICON_IDS.wallet} size={16} className="text-purple-400" />
-            {wallet?.connected ? walletStatus : 'Connect Freighter Wallet'}
+            <span className="absolute inset-0 bg-gray-800 opacity-0 hover:opacity-100 transition-opacity duration-150 pointer-events-none" />
+            <span className="relative z-10 flex items-center gap-2">
+              <Icon id={ICON_IDS.wallet} size={16} className="text-purple-400" />
+              {wallet?.connected ? walletStatus : 'Connect Freighter Wallet'}
+            </span>
           </button>
-          <button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-all text-sm font-medium">
+        <button className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium relative overflow-hidden"
+          style={{ transition: 'transform 150ms ease, box-shadow 150ms ease' }}
+        >
+          <span className="absolute inset-0 bg-blue-700 opacity-0 transition-opacity duration-150 pointer-events-none" />
+          <span className="relative z-10 flex items-center gap-2">
             <Icon id={ICON_IDS.filePlus} size={16} />
             Submit New Proposal
-          </button>
+          </span>
+        </button>
         </div>
       </div>
 
@@ -80,8 +92,17 @@ const GovernanceWalletControl = React.memo(function GovernanceWalletControl() {
   );
 });
 
+function GovernanceWalletControl() {
+  return (
+    <WalletProvider>
+      <GovernanceWalletControlContent />
+    </WalletProvider>
+  );
+}
+
 export default function GovernancePage() {
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'archived'>('all');
+  const isHydrated = useIsHydrated();
 
   // Pre-compute shortened addresses on data ingestion to avoid render-time string slicing
   const transformedProposals = useMemo(
@@ -90,12 +111,16 @@ export default function GovernancePage() {
   );
 
   // Live ledger countdown — one shared RAF tick every ~5 s (Stellar avg ledger time)
+  // Initialize with static values on SSR, then update via effects after hydration
   const [ledgerCounts, setLedgerCounts] = useState<Record<string, number>>(
     () => Object.fromEntries(MOCK_PROPOSALS.map(p => [p.id, p.endsInLedgers]))
   );
 
   // Subscribe to the central master timer (via requestAnimationFrame) to decrement ledger counts.
+  // Only activate after hydration to ensure server and client match initially.
   useEffect(() => {
+    if (!isHydrated) return;
+    
     const unsubscribe = subscribe(() => {
       setLedgerCounts(prev => {
         const next = { ...prev };
@@ -106,7 +131,7 @@ export default function GovernancePage() {
       });
     });
     return () => unsubscribe();
-  }, []);
+  }, [isHydrated]);
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-gray-100 p-8">
@@ -123,9 +148,18 @@ export default function GovernancePage() {
 
       {/* --- Filtering Tabs --- */}
       <div className="flex border-b border-gray-800 mb-6 gap-6">
-        <button onClick={() => setActiveTab('all')} className={`pb-3 text-sm font-medium capitalize transition-all ${activeTab === 'all' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-gray-500 hover:text-gray-300'}`}>All Ballots</button>
-        <button onClick={() => setActiveTab('active')} className={`pb-3 text-sm font-medium capitalize transition-all ${activeTab === 'active' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-gray-500 hover:text-gray-300'}`}>Active</button>
-        <button onClick={() => setActiveTab('archived')} className={`pb-3 text-sm font-medium capitalize transition-all ${activeTab === 'archived' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-gray-500 hover:text-gray-300'}`}>Archived</button>
+        <button onClick={() => setActiveTab('all')} className={`pb-3 text-sm font-medium capitalize relative ${activeTab === 'all' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-gray-500'}`}>
+          {activeTab !== 'all' && <span className="absolute inset-0 bg-white/4 opacity-0 hover:opacity-100 transition-opacity duration-200 pointer-events-none" />}
+          <span className="relative z-10">All Ballots</span>
+        </button>
+        <button onClick={() => setActiveTab('active')} className={`pb-3 text-sm font-medium capitalize relative ${activeTab === 'active' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-gray-500'}`}>
+          {activeTab !== 'active' && <span className="absolute inset-0 bg-white/4 opacity-0 hover:opacity-100 transition-opacity duration-200 pointer-events-none" />}
+          <span className="relative z-10">Active</span>
+        </button>
+        <button onClick={() => setActiveTab('archived')} className={`pb-3 text-sm font-medium capitalize relative ${activeTab === 'archived' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-gray-500'}`}>
+          {activeTab !== 'archived' && <span className="absolute inset-0 bg-white/4 opacity-0 hover:opacity-100 transition-opacity duration-200 pointer-events-none" />}
+          <span className="relative z-10">Archived</span>
+        </button>
       </div>
 
       {/* --- Proposal List Suite --- */}
@@ -135,7 +169,8 @@ export default function GovernancePage() {
           const forPercentage = totalVotes > 0 ? (proposal.votesFor / totalVotes) * 100 : 0;
           
           return (
-            <div key={proposal.id} className="bg-[#161b22] border border-gray-800 rounded-xl p-6 hover:border-gray-700 transition-colors group">
+            <div key={proposal.id} className="bg-[#161b22] border border-gray-800 rounded-xl p-6 group relative overflow-hidden" style={{ transition: 'border-color 150ms ease' }}>
+              <span className="absolute inset-0 bg-gray-700/10 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none" />
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 
                 {/* Proposal Text Meta */}
@@ -150,12 +185,18 @@ export default function GovernancePage() {
                       {proposal.status}
                     </span>
                     {proposal.status === 'Active' && (
-                      <span className="text-xs text-gray-500 flex items-center gap-1 font-mono">
-                        <Icon id={ICON_IDS.clock} size={12} /> ~{(ledgerCounts[proposal.id] ?? 0).toLocaleString()} ledgers remaining
-                      </span>
+                      isHydrated ? (
+                        <span className="text-xs text-gray-500 flex items-center gap-1 font-mono">
+                          <Icon id={ICON_IDS.clock} size={12} /> ~{(ledgerCounts[proposal.id] ?? 0).toLocaleString()} ledgers remaining
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-500 flex items-center gap-1 font-mono">
+                          <Icon id={ICON_IDS.clock} size={12} /> ~{proposal.endsInLedgers.toLocaleString()} ledgers remaining
+                        </span>
+                      )
                     )}
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-100 group-hover:text-blue-400 transition-colors">{proposal.title}</h3>
+                  <h3 className="text-lg font-semibold text-gray-100 group-hover:text-blue-400 relative z-10">{proposal.title}</h3>
                   {/* PERFORMANCE OPTIMIZATION: Use pre-computed shortened address instead of runtime string slicing */}
                   <p className="text-xs text-gray-500 font-mono">Proposed by authority wallet: <span className="text-gray-400">{proposal.shortenedAddress}</span></p>
                 </div>
@@ -176,8 +217,9 @@ export default function GovernancePage() {
                     </div>
                   </div>
 
-                  <button className="p-2 bg-[#0d1117] group-hover:bg-gray-800 border border-gray-700 text-gray-400 rounded-lg shrink-0 self-end md:self-auto transition-colors">
-                    <Icon id={ICON_IDS.chevronRight} size={18} />
+                  <button className="p-2 bg-[#0d1117] border border-gray-700 text-gray-400 rounded-lg shrink-0 self-end md:self-auto relative overflow-hidden" style={{ transition: 'border-color 150ms ease' }}>
+                    <span className="absolute inset-0 bg-gray-800 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none" />
+                    <Icon id={ICON_IDS.chevronRight} size={18} className="relative z-10" />
                   </button>
                 </div>
 
