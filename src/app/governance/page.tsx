@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import Link from 'next/link';
 import { 
   Vote, 
   FilePlus, 
@@ -13,8 +14,13 @@ import {
   ChevronRight, 
   Wallet 
 } from 'lucide-react';
-import { useTransformedCustomAddressField } from '@/app/hooks/useTransformedData';
-import { useRAFInterval } from '@/app/hooks/useRAFInterval';
+import { subscribe } from '@/workers/masterTimerWorker';
+import { withShortenedAddressField } from '@/utils/addressUtils';
+import { useIsHydrated } from '@/app/hooks/useIsHydrated';
+
+import { WalletProvider, useWallet, useWalletStatus, useWalletActions } from '@/app/hooks/useWalletState';
+import Icon from '@/components/icons/Icon';
+import { ICON_IDS } from '@/components/icons/iconIds';
 
 // --- Types ---
 interface Proposal {
@@ -36,64 +42,124 @@ const MOCK_PROPOSALS: Proposal[] = [
   { id: 'SFP-09', title: 'Increase Relayer Missed-Heartbeat Penalty Weight by 2%', proposer: 'GCXXVHZLKMNPQRSXYZABCDEFGHIJKLM7766', status: 'Defeated', votesFor: 110000, votesAgainst: 920000, quorumThreshold: 50, endsInLedgers: 0 },
 ];
 
-export default function GovernancePage() {
-  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'archived'>('all');
+const GovernanceWalletControlContent = React.memo(function GovernanceWalletControlContent() {
+  const { wallet } = useWallet();
+  const { isChecking } = useWalletStatus();
+  const { refreshWalletState } = useWalletActions();
 
-  // Pre-compute shortened addresses on data ingestion to avoid render-time string slicing
-  const transformedProposals = useMemo(
-    () => useTransformedCustomAddressField(MOCK_PROPOSALS, 'proposer'),
-    []
-  );
-
-  // Live ledger countdown — one shared RAF tick every ~5 s (Stellar avg ledger time)
-  const [ledgerCounts, setLedgerCounts] = useState<Record<string, number>>(
-    () => Object.fromEntries(MOCK_PROPOSALS.map(p => [p.id, p.endsInLedgers]))
-  );
-
-  useRAFInterval(() => {
-    setLedgerCounts(prev => {
-      const next = { ...prev };
-      for (const id in next) {
-        if (next[id] > 0) next[id] -= 1;
-      }
-      return next;
-    });
-  }, 5000);
+  const walletStatus = wallet?.connected
+    ? wallet.publicKey
+      ? `${wallet.publicKey.slice(0, 4)}...${wallet.publicKey.slice(-4)}`
+      : 'Connected'
+    : 'No wallet connected';
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-gray-100 p-8">
-      
-      {/* --- Header Section --- */}
+    <div className="flex flex-col gap-3">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
           <p className="text-sm text-gray-500 mb-1">Admin / Consensus</p>
           <h1 className="text-3xl font-bold tracking-tight">Governance & Proposals</h1>
         </div>
-        <div className="flex gap-3">
-          <button className="flex items-center gap-2 bg-[#161b22] border border-gray-800 hover:bg-gray-800 text-gray-300 px-4 py-2 rounded-lg transition-all text-sm font-medium">
-            <Wallet size={16} className="text-purple-400" />
-            Connect Freighter Wallet
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            onClick={() => refreshWalletState()}
+            disabled={isChecking}
+            className="flex items-center gap-2 bg-[#161b22] border border-gray-800 text-gray-300 px-4 py-2 rounded-lg text-sm font-medium relative overflow-hidden"
+            style={{ transition: 'transform 150ms ease, box-shadow 150ms ease' }}
+          >
+            <span className="absolute inset-0 bg-gray-800 opacity-0 hover:opacity-100 transition-opacity duration-150 pointer-events-none" />
+            <span className="relative z-10 flex items-center gap-2">
+              <Icon id={ICON_IDS.wallet} size={16} className="text-purple-400" />
+              {wallet?.connected ? walletStatus : 'Connect Freighter Wallet'}
+            </span>
           </button>
-          <button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-all text-sm font-medium">
-            <FilePlus size={16} />
+        <button className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium relative overflow-hidden"
+          style={{ transition: 'transform 150ms ease, box-shadow 150ms ease' }}
+        >
+          <span className="absolute inset-0 bg-blue-700 opacity-0 transition-opacity duration-150 pointer-events-none" />
+          <span className="relative z-10 flex items-center gap-2">
+            <Icon id={ICON_IDS.filePlus} size={16} />
             Submit New Proposal
-          </button>
+          </span>
+        </button>
         </div>
       </div>
 
+      <div className="mb-3 text-sm text-gray-400">
+        Active wallet status: <span className="text-white">{walletStatus}</span>
+      </div>
+    </div>
+  );
+});
+
+function GovernanceWalletControl() {
+  return (
+    <WalletProvider>
+      <GovernanceWalletControlContent />
+    </WalletProvider>
+  );
+}
+
+export default function GovernancePage() {
+  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'archived'>('all');
+  const isHydrated = useIsHydrated();
+
+  // Pre-compute shortened addresses on data ingestion to avoid render-time string slicing
+  const transformedProposals = useMemo(
+    () => withShortenedAddressField(MOCK_PROPOSALS, 'proposer'),
+    [MOCK_PROPOSALS],
+  );
+
+  // Live ledger countdown — one shared RAF tick every ~5 s (Stellar avg ledger time)
+  // Initialize with static values on SSR, then update via effects after hydration
+  const [ledgerCounts, setLedgerCounts] = useState<Record<string, number>>(
+    () => Object.fromEntries(MOCK_PROPOSALS.map(p => [p.id, p.endsInLedgers]))
+  );
+
+  // Subscribe to the central master timer (via requestAnimationFrame) to decrement ledger counts.
+  // Only activate after hydration to ensure server and client match initially.
+  useEffect(() => {
+    if (!isHydrated) return;
+    
+    const unsubscribe = subscribe(() => {
+      setLedgerCounts(prev => {
+        const next = { ...prev };
+        for (const id in next) {
+          if (next[id] > 0) next[id] -= 1;
+        }
+        return next;
+      });
+    });
+    return () => unsubscribe();
+  }, [isHydrated]);
+
+  return (
+    <div className="min-h-screen bg-[#0a0a0a] text-gray-100 p-8">
+      
+      {/* --- Header Section --- */}
+      <GovernanceWalletControl />
       {/* --- Consensus Statistics Rows --- */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <StatCard title="Total Staking Power" value="2.85M SF" icon={<Vote className="text-blue-400" />} subtitle="Active voting weights" />
-        <StatCard title="Active Ballots" value="2 Proposals" icon={<Clock className="text-yellow-500" />} subtitle="Awaiting validation signatures" />
-        <StatCard title="Voter Turnout Avg" value="74.2%" icon={<Users className="text-green-400" />} subtitle="High network coordinator interest" />
-        <StatCard title="Passing Invariants" value="100%" icon={<CheckCircle className="text-emerald-400" />} subtitle="All parameters safe" />
+        <StatCard title="Total Staking Power" value="2.85M SF" icon={<Icon id={ICON_IDS.vote} size={20} className="text-blue-400" />} subtitle="Active voting weights" />
+        <StatCard title="Active Ballots" value="2 Proposals" icon={<Icon id={ICON_IDS.clock} size={20} className="text-yellow-500" />} subtitle="Awaiting validation signatures" />
+        <StatCard title="Voter Turnout Avg" value="74.2%" icon={<Icon id={ICON_IDS.users} size={20} className="text-green-400" />} subtitle="High network coordinator interest" />
+        <StatCard title="Passing Invariants" value="100%" icon={<Icon id={ICON_IDS.checkCircle} size={20} className="text-emerald-400" />} subtitle="All parameters safe" />
       </div>
 
       {/* --- Filtering Tabs --- */}
       <div className="flex border-b border-gray-800 mb-6 gap-6">
-        <button onClick={() => setActiveTab('all')} className={`pb-3 text-sm font-medium capitalize transition-all ${activeTab === 'all' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-gray-500 hover:text-gray-300'}`}>All Ballots</button>
-        <button onClick={() => setActiveTab('active')} className={`pb-3 text-sm font-medium capitalize transition-all ${activeTab === 'active' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-gray-500 hover:text-gray-300'}`}>Active</button>
-        <button onClick={() => setActiveTab('archived')} className={`pb-3 text-sm font-medium capitalize transition-all ${activeTab === 'archived' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-gray-500 hover:text-gray-300'}`}>Archived</button>
+        <button onClick={() => setActiveTab('all')} className={`pb-3 text-sm font-medium capitalize relative ${activeTab === 'all' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-gray-500'}`}>
+          {activeTab !== 'all' && <span className="absolute inset-0 bg-white/4 opacity-0 hover:opacity-100 transition-opacity duration-200 pointer-events-none" />}
+          <span className="relative z-10">All Ballots</span>
+        </button>
+        <button onClick={() => setActiveTab('active')} className={`pb-3 text-sm font-medium capitalize relative ${activeTab === 'active' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-gray-500'}`}>
+          {activeTab !== 'active' && <span className="absolute inset-0 bg-white/4 opacity-0 hover:opacity-100 transition-opacity duration-200 pointer-events-none" />}
+          <span className="relative z-10">Active</span>
+        </button>
+        <button onClick={() => setActiveTab('archived')} className={`pb-3 text-sm font-medium capitalize relative ${activeTab === 'archived' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-gray-500'}`}>
+          {activeTab !== 'archived' && <span className="absolute inset-0 bg-white/4 opacity-0 hover:opacity-100 transition-opacity duration-200 pointer-events-none" />}
+          <span className="relative z-10">Archived</span>
+        </button>
       </div>
 
       {/* --- Proposal List Suite --- */}
@@ -103,7 +169,8 @@ export default function GovernancePage() {
           const forPercentage = totalVotes > 0 ? (proposal.votesFor / totalVotes) * 100 : 0;
           
           return (
-            <div key={proposal.id} className="bg-[#161b22] border border-gray-800 rounded-xl p-6 hover:border-gray-700 transition-colors group">
+            <div key={proposal.id} className="bg-[#161b22] border border-gray-800 rounded-xl p-6 group relative overflow-hidden" style={{ transition: 'border-color 150ms ease' }}>
+              <span className="absolute inset-0 bg-gray-700/10 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none" />
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 
                 {/* Proposal Text Meta */}
@@ -118,34 +185,41 @@ export default function GovernancePage() {
                       {proposal.status}
                     </span>
                     {proposal.status === 'Active' && (
-                      <span className="text-xs text-gray-500 flex items-center gap-1 font-mono">
-                        <Clock size={12} /> ~{(ledgerCounts[proposal.id] ?? 0).toLocaleString()} ledgers remaining
-                      </span>
+                      isHydrated ? (
+                        <span className="text-xs text-gray-500 flex items-center gap-1 font-mono">
+                          <Icon id={ICON_IDS.clock} size={12} /> ~{(ledgerCounts[proposal.id] ?? 0).toLocaleString()} ledgers remaining
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-500 flex items-center gap-1 font-mono">
+                          <Icon id={ICON_IDS.clock} size={12} /> ~{proposal.endsInLedgers.toLocaleString()} ledgers remaining
+                        </span>
+                      )
                     )}
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-100 group-hover:text-blue-400 transition-colors">{proposal.title}</h3>
+                  <h3 className="text-lg font-semibold text-gray-100 group-hover:text-blue-400 relative z-10">{proposal.title}</h3>
                   {/* PERFORMANCE OPTIMIZATION: Use pre-computed shortened address instead of runtime string slicing */}
                   <p className="text-xs text-gray-500 font-mono">Proposed by authority wallet: <span className="text-gray-400">{proposal.shortenedAddress}</span></p>
                 </div>
 
                 {/* Progress Indicators and Actions */}
                 <div className="flex flex-col md:flex-row items-start md:items-center gap-6 lg:min-w-[320px]">
-                  <div className="w-full space-y-1.5">
+                  <div className="w-full space-y-1.5 voting-ratio-indicator">
                     <div className="flex justify-between text-xs font-mono">
-                      <span className="text-emerald-400 font-bold">For: {forPercentage.toFixed(1)}%</span>
-                      <span className="text-red-400 font-bold">Against: {(100 - forPercentage).toFixed(1)}%</span>
+                      <span className="text-emerald-400 font-bold numeric-value">For: {forPercentage.toFixed(1)}%</span>
+                      <span className="text-red-400 font-bold numeric-value">Against: {(100 - forPercentage).toFixed(1)}%</span>
                     </div>
                     {/* Voting Ratio Track Bar */}
                     <div className="w-full bg-red-950/40 h-2 rounded-full overflow-hidden flex border border-gray-800">
-                      <div className="bg-emerald-500 h-full w-full" style={{ transform: `scaleX(${forPercentage/100})`, transformOrigin: 'left', willChange: 'transform' }} />
+                      <div className="bg-emerald-500 h-full w-full dynamic-scale-x" style={{ '--scale-x': forPercentage/100 } as React.CSSProperties} />
                     </div>
-                    <div className="text-[10px] text-gray-500 font-mono text-right">
+                    <div className="text-[10px] text-gray-500 font-mono text-right numeric-value">
                       Quorum Target Required: {proposal.quorumThreshold}%
                     </div>
                   </div>
 
-                  <button className="p-2 bg-[#0d1117] group-hover:bg-gray-800 border border-gray-700 text-gray-400 rounded-lg shrink-0 self-end md:self-auto transition-colors">
-                    <ChevronRight size={18} />
+                  <button className="p-2 bg-[#0d1117] border border-gray-700 text-gray-400 rounded-lg shrink-0 self-end md:self-auto relative overflow-hidden" style={{ transition: 'border-color 150ms ease' }}>
+                    <span className="absolute inset-0 bg-gray-800 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none" />
+                    <Icon id={ICON_IDS.chevronRight} size={18} className="relative z-10" />
                   </button>
                 </div>
 

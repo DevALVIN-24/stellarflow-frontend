@@ -1,27 +1,24 @@
 import "@/config/env";
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { ProgressBarProvider } from "./components/TopLoadingBar";
 import { UserProvider } from "./components/providers/UserProvider";
 import { QueryProvider } from "./components/providers/QueryProvider";
 import Script from "next/script";
-import {SocketProvider} from "./components/providers/SocketProvider";
+import SvgSprite from "@/components/icons/SvgSprite";
 
+// subsets: ["latin"] restricts glyph maps to Latin characters only,
+// avoiding loading Cyrillic/Greek/CJK blocks and reducing CSS payload.
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
-  display: "swap",
-  weight: ["400", "700"]
+  display: "optional",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-  display: "swap",
-  weight: ["400", "700"]
-});
+// Single variable font asset covers all app text weights; monospace utilities
+// are mapped to this same face in globals.css to avoid a second font payload.
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -38,13 +35,7 @@ export default function RootLayout({
       <head>
         {/* Prevent background flash before next-themes hydrates */}
         <style>{`html { background-color: #0d1117; }`}</style>
-        {/* Preconnect to critical origins */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link
-          rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossOrigin="anonymous"
-        />
+        {/* Preconnect to polyfill CDN (font files are self-hosted via next/font, so no Google Fonts preconnect needed) */}
         <link
           rel="preconnect"
           href="https://polyfill-library.fastly.dev"
@@ -56,6 +47,14 @@ export default function RootLayout({
           as="image"
           type="image/webp"
           fetchPriority="high"
+        />
+        {/* Preload the SVG symbol sheet so icons render on first paint */}
+        <link
+          rel="preload"
+          href="/sprite.svg"
+          as="image"
+          type="image/svg+xml"
+          fetchPriority="low"
         />
         <Script
           id="polyfill-loader"
@@ -77,8 +76,10 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} antialiased`}
       >
+        {/* Single global SVG symbol sheet — all icon <use> refs resolve here */}
+        <SvgSprite />
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
