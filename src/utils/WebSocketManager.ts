@@ -24,6 +24,11 @@ export class WebSocketManager {
   private globalSubscribedAssets: Set<string> = new Set();
   private isConnected: boolean = false;
 
+  // Reference count of active consumers. When this drops to 0 the underlying
+  // WebSocket is torn down so background work stops. It is re-established on
+  // the next `addConsumer()` call.
+  private consumerCount: number = 0;
+
   private constructor() {}
 
   public static getInstance(): WebSocketManager {
@@ -32,6 +37,26 @@ export class WebSocketManager {
     }
     return WebSocketManager.instance;
   }
+
+  // ---- consumer lifecycle --------------------------------------------------
+
+  /** Register an active consumer. Connects the socket if this is the first. */
+  public addConsumer(): void {
+    this.consumerCount++;
+    if (this.consumerCount === 1) {
+      this.connect();
+    }
+  }
+
+  /** Deregister a consumer. Tears down the socket when no consumers remain. */
+  public removeConsumer(): void {
+    this.consumerCount = Math.max(0, this.consumerCount - 1);
+    if (this.consumerCount === 0) {
+      this.disconnect();
+    }
+  }
+
+  // ---- connection management -----------------------------------------------
 
   public connect() {
     if (typeof window === "undefined") return;
@@ -71,6 +96,21 @@ export class WebSocketManager {
     } catch (err) {
       console.error("Failed to establish centralized WebSocket connection", err);
     }
+  }
+
+  /** Close the WebSocket and clear all server-side subscriptions. */
+  private disconnect() {
+    if (this.ws) {
+      this.ws.onopen = null;
+      this.ws.onmessage = null;
+      this.ws.onclose = null;
+      this.ws.onerror = null;
+      this.ws.close();
+      this.ws = null;
+    }
+    this.isConnected = false;
+    this.globalSubscribedAssets.clear();
+    this.notifyStatusListeners(false);
   }
 
   // Subscribe a component listener to message data events
