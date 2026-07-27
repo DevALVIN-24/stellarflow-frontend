@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { 
   Vote, 
   FilePlus, 
@@ -17,6 +18,37 @@ import {
 import { subscribe } from '@/workers/masterTimerWorker';
 import { withShortenedAddressField } from '@/utils/addressUtils';
 import { useIsHydrated } from '@/app/hooks/useIsHydrated';
+import type { ProposalVote } from '@/types/voting';
+
+// Lazily load the voting grid — it pulls in @tanstack/react-table which is
+// a heavy dependency not needed for the initial above-the-fold proposal list.
+const DeferredVotingGrid = dynamic(
+  () => import('@/components/voting/DeferredVotingGrid').then(
+    (m) => m.DeferredVotingGrid
+  ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full animate-pulse space-y-3 p-4" aria-label="Loading voting history">
+        <div className="h-4 w-48 rounded bg-gray-700" />
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-8 rounded bg-gray-800" />
+        ))}
+      </div>
+    ),
+  }
+);
+
+// Mock vote data for the active proposals (deferred behind user interaction)
+const MOCK_VOTES: Record<string, ProposalVote[]> = {
+  'SFP-12': [
+    { id: 'v1', voter: 'GA5THZLKMNPQRSXYZABCDEFGHIJKLMNBC9A', proposalId: 'SFP-12', voteType: 'For', votingPower: 50000, timestamp: '2026-07-25T10:00:00Z', transactionHash: 'abc123def456abc123def456abc123def456abc123def456abc123def456abc123', status: 'confirmed' },
+    { id: 'v2', voter: 'GBC2VHZLKMNPQRSXYZABCDEFGHIJKLMLOPA', proposalId: 'SFP-12', voteType: 'Against', votingPower: 20000, timestamp: '2026-07-25T11:30:00Z', transactionHash: 'def456abc123def456abc123def456abc123def456abc123def456abc123def456', status: 'confirmed' },
+  ],
+  'SFP-11': [
+    { id: 'v3', voter: 'GDRTVHZLKMNPQRSXYZABCDEFGHIJKLM1122', proposalId: 'SFP-11', voteType: 'For', votingPower: 120000, timestamp: '2026-07-26T08:00:00Z', transactionHash: 'ghi789jkl012ghi789jkl012ghi789jkl012ghi789jkl012ghi789jkl012ghi789', status: 'confirmed' },
+  ],
+};
 
 import { WalletProvider, useWallet, useWalletStatus, useWalletActions } from '@/app/hooks/useWalletState';
 import Icon from '@/components/icons/Icon';
@@ -102,6 +134,7 @@ function GovernanceWalletControl() {
 
 export default function GovernancePage() {
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'archived'>('all');
+  const [expandedProposal, setExpandedProposal] = useState<string | null>(null);
   const isHydrated = useIsHydrated();
 
   // Pre-compute shortened addresses on data ingestion to avoid render-time string slicing
@@ -217,13 +250,34 @@ export default function GovernancePage() {
                     </div>
                   </div>
 
-                  <button className="p-2 bg-[#0d1117] border border-gray-700 text-gray-400 rounded-lg shrink-0 self-end md:self-auto relative overflow-hidden" style={{ transition: 'border-color 150ms ease' }}>
+                  <button
+                    onClick={() => setExpandedProposal(expandedProposal === proposal.id ? null : proposal.id)}
+                    aria-expanded={expandedProposal === proposal.id}
+                    aria-label={`${expandedProposal === proposal.id ? 'Collapse' : 'Expand'} voting history for ${proposal.id}`}
+                    className="p-2 bg-[#0d1117] border border-gray-700 text-gray-400 rounded-lg shrink-0 self-end md:self-auto relative overflow-hidden"
+                    style={{ transition: 'border-color 150ms ease' }}
+                  >
                     <span className="absolute inset-0 bg-gray-800 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none" />
-                    <Icon id={ICON_IDS.chevronRight} size={18} className="relative z-10" />
+                    <Icon
+                      id={ICON_IDS.chevronRight}
+                      size={18}
+                      className={`relative z-10 transition-transform duration-200 ${expandedProposal === proposal.id ? 'rotate-90' : ''}`}
+                    />
                   </button>
                 </div>
 
               </div>
+
+              {/* Lazily-loaded voting history — @tanstack/react-table is deferred until user expands */}
+              {expandedProposal === proposal.id && (
+                <div className="mt-4 border-t border-gray-800 pt-4">
+                  <DeferredVotingGrid
+                    data={MOCK_VOTES[proposal.id] ?? []}
+                    proposalId={proposal.id}
+                    hydrationDelay={50}
+                  />
+                </div>
+              )}
             </div>
           );
         })}
