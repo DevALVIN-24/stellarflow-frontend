@@ -17,11 +17,32 @@ import {
   TrendingUp, 
   ArrowUpRight 
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import {
   StakerTableRow,
   type StakerTableRecord,
 } from '@/app/components/staking/StakerTableRow';
-import { BondAllocationCalculator } from '@/app/components/staking/BondAllocationCalculator';
+
+// Lazily load the BondAllocationCalculator — it pulls in SliderRow and heavy
+// calculation logic that is not needed for the above-the-fold table view.
+const BondAllocationCalculator = dynamic(
+  () => import('@/app/components/staking/BondAllocationCalculator').then(
+    (m) => m.BondAllocationCalculator
+  ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="mt-8 bg-[#161b22] border border-gray-800 rounded-xl p-6 animate-pulse">
+        <div className="h-5 w-48 rounded bg-gray-700 mb-6" />
+        <div className="space-y-4">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-10 rounded bg-gray-700/60" />
+          ))}
+        </div>
+      </div>
+    ),
+  }
+);
 import Icon from '@/components/icons/Icon';
 import { ICON_IDS } from '@/components/icons/iconIds';
 

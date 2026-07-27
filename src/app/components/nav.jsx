@@ -7,51 +7,25 @@ import { useRouter, usePathname } from "next/navigation";
 import Icon from "@/components/icons/Icon";
 import { ICON_IDS } from "@/components/icons/iconIds";
 import { useProgressBar } from "./TopLoadingBar";
-import { WalletProvider, useWallet, useWalletStatus, useWalletActions } from "../hooks/useWalletState";
+import dynamic from "next/dynamic";
 
-const WalletConnectButtonContent = memo(() => {
-  const { wallet } = useWallet();
-  const { isChecking } = useWalletStatus();
-  const { refreshWalletState } = useWalletActions();
-  const { start, done } = useProgressBar();
-
-  const walletLabel = wallet?.connected
-    ? wallet.publicKey
-      ? `${wallet.publicKey.slice(0, 4)}...${wallet.publicKey.slice(-4)}`
-      : "Wallet connected"
-    : "Connect Wallet";
-
-  const handleConnectWallet = useCallback(async () => {
-    start();
-    const state = await refreshWalletState();
-    done();
-
-    if (state?.connected) {
-      alert(`Connected wallet: ${state.publicKey ?? "unknown"}`);
-    } else {
-      alert("No active Stellar wallet detected. Please connect your extension.");
-    }
-  }, [refreshWalletState, start, done]);
-
-  return (
-    <button
-      onClick={handleConnectWallet}
-      disabled={isChecking}
-      className="wallet-btn group flex min-w-0 items-center gap-2 px-3 sm:gap-2.5 sm:px-4 py-2 rounded-2xl font-semibold text-sm sm:text-base transition-all duration-300 hover:shadow-xl active:scale-95 whitespace-nowrap"
-    >
-      <Icon id={ICON_IDS.wallet} size={18} className="transition-transform group-hover:rotate-12" />
-      <span className="truncate">{walletLabel}</span>
-    </button>
-  );
-});
-WalletConnectButtonContent.displayName = "WalletConnectButtonContent";
-
-const WalletConnectButton = memo(() => (
-  <WalletProvider>
-    <WalletConnectButtonContent />
-  </WalletProvider>
-));
-WalletConnectButton.displayName = "WalletConnectButton";
+// Lazily load the wallet connect button + WalletProvider.
+// WalletProvider pulls in the entire wallet context + @stellar/freighter-api
+// browser extension bridge; deferring it keeps that code out of the initial
+// nav chunk and off the critical path for first contentful paint.
+const WalletConnectButton = dynamic(
+  () => import("./WalletConnectButton"),
+  {
+    ssr: false,
+    // Static placeholder that matches the button's shape to avoid layout shift
+    loading: () => (
+      <div className="wallet-btn flex min-w-0 items-center gap-2 px-3 sm:gap-2.5 sm:px-4 py-2 rounded-2xl text-sm sm:text-base whitespace-nowrap opacity-60 pointer-events-none">
+        <Icon id={ICON_IDS.wallet} size={18} />
+        <span className="truncate">Connect Wallet</span>
+      </div>
+    ),
+  }
+);
 
 const Nav = memo(() => {
   const hasAnomaly = true;
