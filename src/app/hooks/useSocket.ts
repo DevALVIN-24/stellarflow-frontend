@@ -145,7 +145,7 @@ function useSocketState(options: UseSocketOptions): UseSocketReturn {
 
     wsManager.subscribeToMessages(handleIncomingData);
     wsManager.subscribeToStatus(handleStatusChange);
-    wsManager.connect();
+    wsManager.addConsumer();
 
     const assetsOnMount = Array.from(subscribedAssetsRef.current);
     if (assetsOnMount.length > 0) {
@@ -155,10 +155,16 @@ function useSocketState(options: UseSocketOptions): UseSocketReturn {
     return () => {
       wsManager.unsubscribeFromMessages(handleIncomingData);
       wsManager.unsubscribeFromStatus(handleStatusChange);
-      if (assetsOnMount.length > 0) {
-        wsManager.unsubscribeFromAssets(assetsOnMount);
+      // Unsubscribe from ALL assets this consumer is tracking — not just the
+      // snapshot captured at mount — so dynamically added subscriptions are
+      // cleaned up and do not leak in the singleton manager.
+      const remaining = Array.from(subscribedAssetsRef.current);
+      if (remaining.length > 0) {
+        wsManager.unsubscribeFromAssets(remaining);
+        subscribedAssetsRef.current.clear();
       }
       flushPendingUpdates();
+      wsManager.removeConsumer();
     };
   }, [wsManager, isVisible, setError, flushPendingUpdates]);
 
