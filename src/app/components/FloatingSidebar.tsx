@@ -58,7 +58,7 @@ const FloatingSidebar = memo(() => {
   if (!mounted) {
     return (
       <nav
-        className="fixed left-2 top-1/2 z-50 flex h-auto w-14 flex-col items-center justify-start gap-2 rounded-full px-2 py-4 -translate-y-1/2 md:left-4 md:top-1/2 md:w-auto md:max-w-none md:px-2 md:py-4"
+        className="fixed left-2 top-1/2 z-50 hidden md:flex h-auto w-14 flex-col items-center justify-start gap-2 rounded-full px-2 py-4 -translate-y-1/2 md:left-4 md:top-1/2 md:w-auto md:max-w-none md:px-2 md:py-4"
         style={{
           background: "rgb(15, 23, 35)",
           border: "1px solid rgba(255,255,255,0.08)",
@@ -90,7 +90,7 @@ const FloatingSidebar = memo(() => {
 
   return (
     <nav
-      className="fixed left-2 top-1/2 z-50 flex h-auto w-14 flex-col items-center justify-start gap-2 rounded-full px-2 py-4 -translate-y-1/2 md:left-4 md:top-1/2 md:w-auto md:max-w-none md:px-2 md:py-4"
+      className="fixed left-2 top-1/2 z-50 hidden md:flex h-auto w-14 flex-col items-center justify-start gap-2 rounded-full px-2 py-4 -translate-y-1/2 md:left-4 md:top-1/2 md:w-auto md:max-w-none md:px-2 md:py-4"
       style={{
         background: "rgb(15, 23, 35)",
         border: "1px solid rgba(255,255,255,0.08)",
