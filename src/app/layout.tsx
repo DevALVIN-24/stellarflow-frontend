@@ -6,6 +6,7 @@ import { ThemeProvider } from "./components/ThemeProvider";
 import { ProgressBarProvider } from "./components/TopLoadingBar";
 import { UserProvider } from "./components/providers/UserProvider";
 import { QueryProvider } from "./components/providers/QueryProvider";
+import { ToastProvider } from "@/components/ui/ToastQueue";
 import Script from "next/script";
 import SvgSprite from "@/components/icons/SvgSprite";
 
@@ -89,7 +90,9 @@ export default function RootLayout({
           <UserProvider>
             <QueryProvider>
               <ProgressBarProvider>
-                {children}
+                <ToastProvider>
+                  {children}
+                </ToastProvider>
               </ProgressBarProvider>
             </QueryProvider>
           </UserProvider>
